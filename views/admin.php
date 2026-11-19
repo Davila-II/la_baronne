@@ -3,16 +3,12 @@
  * Back-office d'administration DjoKhouse SCI
  */
 require_once __DIR__ . '/../models/Database.php';
+require_once __DIR__ . '/../models/SessionManager.php';
+require_once __DIR__ . '/../models/SupabaseStorage.php';
 require_once __DIR__ . '/../models/i18n.php';
 
-// Session setup
-if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
-    $sessPath = session_save_path();
-    if (empty($sessPath) || !is_writable($sessPath)) {
-        @session_save_path(sys_get_temp_dir());
-    }
-    @session_start();
-}
+// Session setup (compatible Vercel via SessionManager)
+SessionManager::start();
 
 $db = Database::getConn();
 $authError = '';
@@ -25,8 +21,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'login') {
 
     $user = Database::fetchOne("SELECT * FROM admin_users WHERE username = ?", [$username]);
     if ($user && password_verify($password, $user['password_hash'])) {
-        $_SESSION['admin_logged'] = true;
-        $_SESSION['admin_user'] = $user['username'];
+        SessionManager::set('admin_logged', true);
+        SessionManager::set('admin_user', $user['username']);
         header("Location: index.php?page=admin");
         exit;
     } else {
@@ -36,14 +32,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'login') {
 
 // Handle Logout
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
-    unset($_SESSION['admin_logged']);
-    unset($_SESSION['admin_user']);
+    SessionManager::remove('admin_logged');
+    SessionManager::remove('admin_user');
     header("Location: index.php?page=admin");
     exit;
 }
 
 // Check auth
-$isLoggedIn = !empty($_SESSION['admin_logged']);
+$isLoggedIn = SessionManager::get('admin_logged') === true;
 
 // If logged in, handle admin actions
 if ($isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -51,25 +47,25 @@ if ($isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Add or Edit Property
     if ($action === 'save_property') {
-        $id = !empty($_POST['id']) ? (int)$_POST['id'] : null;
-        $title = trim($_POST['title'] ?? '');
-        $category = trim($_POST['category'] ?? 'Terrain');
-        $type = trim($_POST['type'] ?? 'Vente');
-        $price = trim($_POST['price'] ?? '');
-        $surface = trim($_POST['surface'] ?? '');
-        $location = trim($_POST['location'] ?? '');
+        $id          = !empty($_POST['id']) ? (int)$_POST['id'] : null;
+        $title       = trim($_POST['title'] ?? '');
+        $category    = trim($_POST['category'] ?? 'Terrain');
+        $type        = trim($_POST['type'] ?? 'Vente');
+        $price       = trim($_POST['price'] ?? '');
+        $surface     = trim($_POST['surface'] ?? '');
+        $location    = trim($_POST['location'] ?? '');
         $description = trim($_POST['description'] ?? '');
         $is_featured = isset($_POST['is_featured']) ? 1 : 0;
-        $image = trim($_POST['existing_image'] ?? 'images/folio/1.jpg');
+        $image       = trim($_POST['existing_image'] ?? 'images/folio/1.jpg');
 
-        // Handle File Upload if provided
+        // Handle File Upload via SupabaseStorage (ou local)
         if (!empty($_FILES['image_file']['name']) && $_FILES['image_file']['error'] === UPLOAD_ERR_OK) {
             $ext = strtolower(pathinfo($_FILES['image_file']['name'], PATHINFO_EXTENSION));
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                $newFilename = 'prop_' . time() . '_' . rand(100, 999) . '.' . $ext;
-                $dest = __DIR__ . '/../images/folio/' . $newFilename;
-                if (move_uploaded_file($_FILES['image_file']['tmp_name'], $dest)) {
-                    $image = 'images/folio/' . $newFilename;
+                try {
+                    $image = SupabaseStorage::upload($_FILES['image_file'], 'properties');
+                } catch (RuntimeException $e) {
+                    $actionSuccess = 'Avertissement upload : ' . $e->getMessage();
                 }
             }
         }
@@ -78,29 +74,29 @@ if ($isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($id) {
             Database::update('properties', [
-                'title' => $title,
-                'slug' => $slug,
-                'category' => $category,
-                'type' => $type,
-                'price' => $price,
-                'surface' => $surface,
-                'location' => $location,
+                'title'       => $title,
+                'slug'        => $slug,
+                'category'    => $category,
+                'type'        => $type,
+                'price'       => $price,
+                'surface'     => $surface,
+                'location'    => $location,
                 'description' => $description,
-                'image' => $image,
+                'image'       => $image,
                 'is_featured' => $is_featured
             ], 'id = ?', [$id]);
             $actionSuccess = "Bien / Terrain modifié avec succès !";
         } else {
             Database::insert('properties', [
-                'title' => $title,
-                'slug' => $slug,
-                'category' => $category,
-                'type' => $type,
-                'price' => $price,
-                'surface' => $surface,
-                'location' => $location,
+                'title'       => $title,
+                'slug'        => $slug,
+                'category'    => $category,
+                'type'        => $type,
+                'price'       => $price,
+                'surface'     => $surface,
+                'location'    => $location,
                 'description' => $description,
-                'image' => $image,
+                'image'       => $image,
                 'is_featured' => $is_featured
             ]);
             $actionSuccess = "Nouveau bien / terrain ajouté avec succès !";
@@ -116,13 +112,13 @@ if ($isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Update Service
     if ($action === 'update_service') {
-        $id = (int)$_POST['id'];
-        $title = trim($_POST['title'] ?? '');
+        $id      = (int)$_POST['id'];
+        $title   = trim($_POST['title'] ?? '');
         $summary = trim($_POST['summary'] ?? '');
         $content = trim($_POST['content'] ?? '');
 
         Database::update('services', [
-            'title' => $title,
+            'title'   => $title,
             'summary' => $summary,
             'content' => $content
         ], 'id = ?', [$id]);
@@ -144,7 +140,7 @@ if ($isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Update Reservation Status
     if ($action === 'update_reservation_status') {
-        $id = (int)$_POST['id'];
+        $id     = (int)$_POST['id'];
         $status = trim($_POST['status'] ?? 'En attente');
         Database::update('reservations', ['status' => $status], 'id = ?', [$id]);
         $actionSuccess = "Statut de la demande mis à jour ($status).";
@@ -158,35 +154,35 @@ if ($isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Update Site Settings
     if ($action === 'save_settings') {
-        $site_name = trim($_POST['site_name'] ?? 'DjoKhouse SCI');
-        $slogan = trim($_POST['slogan'] ?? '');
-        $phone = trim($_POST['phone'] ?? '');
-        $phone2 = trim($_POST['phone2'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $address = trim($_POST['address'] ?? '');
+        $site_name     = trim($_POST['site_name'] ?? 'DjoKhouse SCI');
+        $slogan        = trim($_POST['slogan'] ?? '');
+        $phone         = trim($_POST['phone'] ?? '');
+        $phone2        = trim($_POST['phone2'] ?? '');
+        $email         = trim($_POST['email'] ?? '');
+        $address       = trim($_POST['address'] ?? '');
         $about_summary = trim($_POST['about_summary'] ?? '');
-        $facebook = trim($_POST['facebook'] ?? '');
-        $linkedin = trim($_POST['linkedin'] ?? '');
-        $whatsapp = trim($_POST['whatsapp'] ?? '');
+        $facebook      = trim($_POST['facebook'] ?? '');
+        $linkedin      = trim($_POST['linkedin'] ?? '');
+        $whatsapp      = trim($_POST['whatsapp'] ?? '');
 
         Database::update('site_settings', [
-            'site_name' => $site_name,
-            'slogan' => $slogan,
-            'phone' => $phone,
-            'phone2' => $phone2,
-            'email' => $email,
-            'address' => $address,
+            'site_name'     => $site_name,
+            'slogan'        => $slogan,
+            'phone'         => $phone,
+            'phone2'        => $phone2,
+            'email'         => $email,
+            'address'       => $address,
             'about_summary' => $about_summary,
-            'facebook' => $facebook,
-            'linkedin' => $linkedin,
-            'whatsapp' => $whatsapp
+            'facebook'      => $facebook,
+            'linkedin'      => $linkedin,
+            'whatsapp'      => $whatsapp
         ], 'id = 1');
 
         // Optional change password
         $new_pass = trim($_POST['new_password'] ?? '');
         if (!empty($new_pass)) {
             $hash = password_hash($new_pass, PASSWORD_DEFAULT);
-            Database::update('admin_users', ['password_hash' => $hash], 'username = ?', [$_SESSION['admin_user']]);
+            Database::update('admin_users', ['password_hash' => $hash], 'username = ?', [SessionManager::get('admin_user')]);
             $actionSuccess = "Paramètres et mot de passe enregistrés avec succès !";
         } else {
             $actionSuccess = "Paramètres du site enregistrés avec succès !";
@@ -196,14 +192,14 @@ if ($isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Fetch dashboard data
 if ($isLoggedIn) {
-    $settings = Database::fetchOne("SELECT * FROM site_settings WHERE id = 1");
-    $properties = Database::fetchAll("SELECT * FROM properties ORDER BY id DESC");
-    $services = Database::fetchAll("SELECT * FROM services ORDER BY order_num ASC");
-    $messages = Database::fetchAll("SELECT * FROM messages ORDER BY id DESC");
+    $settings     = Database::fetchOne("SELECT * FROM site_settings WHERE id = 1");
+    $properties   = Database::fetchAll("SELECT * FROM properties ORDER BY id DESC");
+    $services     = Database::fetchAll("SELECT * FROM services ORDER BY order_num ASC");
+    $messages     = Database::fetchAll("SELECT * FROM messages ORDER BY id DESC");
     $reservations = Database::fetchAll("SELECT * FROM reservations ORDER BY id DESC");
-    $newsletters = Database::fetchAll("SELECT * FROM newsletter ORDER BY id DESC");
+    $newsletters  = Database::fetchAll("SELECT * FROM newsletter ORDER BY id DESC");
 
-    $unreadCount = Database::query("SELECT COUNT(*) FROM messages WHERE is_read = 0")->fetchColumn();
+    $unreadCount     = Database::query("SELECT COUNT(*) FROM messages WHERE is_read = 0")->fetchColumn();
     $pendingResCount = Database::query("SELECT COUNT(*) FROM reservations WHERE status = 'En attente'")->fetchColumn();
 }
 ?>
@@ -373,7 +369,7 @@ if ($isLoggedIn) {
         </div>
         <div class="nav-actions">
             <?= i18n::renderSwitcher() ?>
-            <span><?= __("admin_logged_as") ?> <strong><?= htmlspecialchars($_SESSION['admin_user']) ?></strong></span>
+            <span><?= __("admin_logged_as") ?> <strong><?= htmlspecialchars(SessionManager::get('admin_user')) ?></strong></span>
             <a href="home" target="_blank" class="btn-site"><i class="fa fa-globe"></i> <?= __("admin_view_site") ?></a>
             <a href="index.php?page=admin&action=logout" class="btn-logout"><i class="fa fa-sign-out-alt"></i> <?= __("admin_logout") ?></a>
         </div>

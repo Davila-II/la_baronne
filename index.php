@@ -1,19 +1,11 @@
 <?php
     header("Cache-Control: no-store, no-cache, must-revalidate");
-    header("Cache-Control: post-check=0, pre-check=0", false); 
+    header("Cache-Control: post-check=0, pre-check=0", false);
     header("Cache-Control: private");
     header("Pragma: no-cache");
     header('Content-Type:text/html; Charset=UTF-8');
-	
-    ob_start();
 
-    if (session_status() === PHP_SESSION_NONE) {
-        $sessPath = session_save_path();
-        if (empty($sessPath) || !is_writable($sessPath)) {
-            @session_save_path(sys_get_temp_dir());
-        }
-        @session_start();
-    }
+    ob_start();
 
     // Auto-detect base URL based on environment
     if (!defined("BASEURL")) {
@@ -21,10 +13,14 @@
         define("BASEURL", $scriptDir ? $scriptDir . '/' : '/');
     }
 
+    require_once("models/SessionManager.php");
     require_once("db.php");
     require_once("models/i18n.php");
     require_once("fonctions.php");
     require_once("models/classes.php");
+
+    // Démarrer la session (compatible Vercel)
+    SessionManager::start();
 
     $query = array();
     $parts = parse_url($_SERVER["REQUEST_URI"] ?? '');
@@ -50,8 +46,8 @@
         }
     }
 
-    if (!isset($_SESSION['lang'])) {
-        $_SESSION['lang'] = 'fr';
+    if (!SessionManager::has('lang')) {
+        SessionManager::set('lang', 'fr');
     }
 
     // Dynamic global settings
@@ -188,7 +184,7 @@
             if (!in_array($newLang, ['fr', 'en'])) {
                 $newLang = 'fr';
             }
-            $_SESSION['lang'] = $newLang;
+            SessionManager::set('lang', $newLang);
             if (!headers_sent()) {
                 setcookie('djok_lang', $newLang, time() + (86400 * 365), '/');
             }
