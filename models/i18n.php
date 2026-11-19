@@ -2,7 +2,14 @@
 /**
  * Internationalization (i18n) Engine for DjoKhouse SCI
  * Supports French (fr) & English (en)
+ * Compatible Vercel serverless (utilise SessionManager)
  */
+
+// Charge SessionManager si pas encore chargé
+if (!class_exists('SessionManager')) {
+    require_once __DIR__ . '/SessionManager.php';
+}
+
 class i18n {
     private static string $lang = 'fr';
     private static array $strings = [];
@@ -13,32 +20,27 @@ class i18n {
             return;
         }
 
-        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
-            $sessPath = session_save_path();
-            if (empty($sessPath) || !is_writable($sessPath)) {
-                @session_save_path(sys_get_temp_dir());
-            }
-            @session_start();
-        }
+        // Démarrer la session (via SessionManager — compatible Vercel)
+        SessionManager::start();
 
-        // Check query param
+        // Priorité : paramètre URL > session > cookie > défaut
         if (isset($_GET['lang']) && in_array(strtolower($_GET['lang']), ['fr', 'en'])) {
             self::$lang = strtolower($_GET['lang']);
-            $_SESSION['lang'] = self::$lang;
+            SessionManager::set('lang', self::$lang);
             if (!headers_sent()) {
                 setcookie('djok_lang', self::$lang, time() + (86400 * 365), '/');
             }
-        } elseif (isset($_SESSION['lang']) && in_array($_SESSION['lang'], ['fr', 'en'])) {
-            self::$lang = $_SESSION['lang'];
+        } elseif (SessionManager::has('lang') && in_array(SessionManager::get('lang'), ['fr', 'en'])) {
+            self::$lang = SessionManager::get('lang');
         } elseif (isset($_COOKIE['djok_lang']) && in_array($_COOKIE['djok_lang'], ['fr', 'en'])) {
             self::$lang = $_COOKIE['djok_lang'];
-            $_SESSION['lang'] = self::$lang;
+            SessionManager::set('lang', self::$lang);
         } else {
             self::$lang = 'fr';
-            $_SESSION['lang'] = 'fr';
+            SessionManager::set('lang', 'fr');
         }
 
-        // Load language dictionary
+        // Charger le dictionnaire
         $langFile = __DIR__ . '/../langs/' . self::$lang . '.php';
         if (file_exists($langFile)) {
             self::$strings = require $langFile;
@@ -48,49 +50,23 @@ class i18n {
     }
 
     public static function lang(): string {
-        if (!self::$initialized) {
-            self::init();
-        }
+        if (!self::$initialized) self::init();
         return self::$lang;
     }
 
-    public static function isEn(): bool {
-        return self::lang() === 'en';
-    }
-
-    public static function isFr(): bool {
-        return self::lang() === 'fr';
-    }
+    public static function isEn(): bool { return self::lang() === 'en'; }
+    public static function isFr(): bool { return self::lang() === 'fr'; }
 
     public static function get(string $key, string $default = ''): string {
-        if (!self::$initialized) {
-            self::init();
-        }
-        if (isset(self::$strings[$key])) {
-            return self::$strings[$key];
-        }
-        return !empty($default) ? $default : $key;
-    }
-
-    /**
-     * Generate URL to switch language while preserving existing query params
-     */
-    public static function switchUrl(string $targetLang): string {
-        $params = $_GET;
-        $params['lang'] = $targetLang;
-
-        $queryString = http_build_query($params);
-        $page = basename($_SERVER['SCRIPT_NAME'] ?? 'index.php');
-
-        return $page . ($queryString ? '?' . $queryString : '');
+        if (!self::$initialized) self::init();
+        return self::$strings[$key] ?? (!empty($default) ? $default : $key);
     }
 
     /**
      * Render the visual Language Switcher HTML component
      */
     public static function renderSwitcher(string $extraClass = ''): string {
-        $cur = self::lang();
-
+        $cur     = self::lang();
         $frClass = $cur === 'fr' ? 'lang-btn active' : 'lang-btn';
         $enClass = $cur === 'en' ? 'lang-btn active' : 'lang-btn';
 
