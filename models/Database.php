@@ -27,19 +27,34 @@ class Database {
             $host   = $parts['host'] ?? 'localhost';
             $port   = $parts['port'] ?? 5432;
             $dbname = ltrim($parts['path'] ?? '/postgres', '/');
-            $user   = $parts['user'] ?? 'postgres';
-            $pass   = $parts['pass'] ?? '';
+            $user   = urldecode($parts['user'] ?? 'postgres');
+            $pass   = urldecode($parts['pass'] ?? '');
+
+            // Fallback port si query param pgbouncer/pooler
+            if (isset($parts['query'])) {
+                parse_str($parts['query'], $qParams);
+                if (!empty($qParams['sslmode'])) {
+                    // sslmode already specified
+                }
+            }
 
             $dsn = "pgsql:host={$host};port={$port};dbname={$dbname};sslmode=require";
 
-            $pdo = new PDO($dsn, $user, $pass, [
-                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_PERSISTENT         => false,
-            ]);
+            try {
+                $pdo = new PDO($dsn, $user, $pass, [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_PERSISTENT         => false,
+                    PDO::ATTR_TIMEOUT            => 5,
+                ]);
 
-            self::$driver = 'pgsql';
-            return $pdo;
+                self::$driver = 'pgsql';
+                return $pdo;
+            } catch (PDOException $e) {
+                // En cas d'erreur de connexion à Supabase, afficher un message d'erreur explicite
+                header('HTTP/1.1 500 Internal Server Error');
+                die("<h3>Erreur de connexion Supabase (PostgreSQL) :</h3><pre>" . htmlspecialchars($e->getMessage()) . "</pre><p>Vérifiez SUPABASE_DB_URL dans les variables d'environnement Vercel.</p>");
+            }
         }
 
         // --- Local : SQLite (développement) ---
