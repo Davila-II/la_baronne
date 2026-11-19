@@ -16,18 +16,19 @@ register_shutdown_function(function() {
     }
 });
 
-// Set document root / directory context
-chdir(__DIR__ . '/..');
-
-try {
-    // Require the main application router/entry point
-    require __DIR__ . '/../index.php';
-} catch (Throwable $e) {
-    header('HTTP/1.1 500 Internal Server Error');
-    echo "<h1>Application Error (500)</h1>";
-    echo "<p><strong>Message:</strong> " . htmlspecialchars($e->getMessage()) . "</p>";
-    echo "<p><strong>File:</strong> " . htmlspecialchars($e->getFile()) . " (line " . $e->getLine() . ")</p>";
-    echo "<pre>" . htmlspecialchars($e->getTraceAsString()) . "</pre>";
+// Resolve the project root directory
+$rootDir = dirname(__DIR__);
+if (file_exists($rootDir . '/index.php')) {
+    chdir($rootDir);
+    require $rootDir . '/index.php';
+} elseif (file_exists(__DIR__ . '/index.php')) {
+    require __DIR__ . '/index.php';
+} else {
+    echo "<h1>Error: Cannot locate index.php</h1>";
+    echo "<p>Current dir: " . htmlspecialchars(__DIR__) . "</p>";
+    echo "<p>Files in current dir: " . implode(', ', scandir(__DIR__)) . "</p>";
+    echo "<p>Files in parent dir: " . implode(', ', scandir(dirname(__DIR__))) . "</p>";
 }
+
 
 
