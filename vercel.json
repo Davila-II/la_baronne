@@ -1,14 +1,15 @@
 {
   "version": 2,
   "functions": {
-    "api/index.php": {
+    "api/*.php": {
       "runtime": "vercel-php@0.7.4",
-      "includeFiles": "{views,models,controller,langs,data}/**"
+      "includeFiles": "{index.php,db.php,fonctions.php,views/**,models/**,langs/**}"
     }
   },
   "routes": [
     { "src": "/(css|js|images|fonts|video)/(.*)", "dest": "/$1/$2" },
     { "src": "/(.*\\.(?:ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|map|css|js|mp4))", "dest": "/$1" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/(.*)", "dest": "/api/index.php" }
   ]
 }
