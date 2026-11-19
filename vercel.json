@@ -1,39 +1,14 @@
 {
   "version": 2,
   "functions": {
-    "api/*.php": {
-      "runtime": "vercel-php@0.7.3",
-      "includeFiles": "views/**,models/**,langs/**,index.php,db.php,fonctions.php"
+    "api/index.php": {
+      "runtime": "vercel-php@0.7.4",
+      "includeFiles": "{views,models,controller,langs,data}/**"
     }
   },
   "routes": [
-    {
-      "src": "/css/(.*)",
-      "dest": "/css/$1"
-    },
-    {
-      "src": "/js/(.*)",
-      "dest": "/js/$1"
-    },
-    {
-      "src": "/images/(.*)",
-      "dest": "/images/$1"
-    },
-    {
-      "src": "/fonts/(.*)",
-      "dest": "/fonts/$1"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*\\.(?:ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|map|css|js))",
-      "dest": "/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api/index.php"
-    }
+    { "src": "/(css|js|images|fonts|video)/(.*)", "dest": "/$1/$2" },
+    { "src": "/(.*\\.(?:ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|map|css|js|mp4))", "dest": "/$1" },
+    { "src": "/(.*)", "dest": "/api/index.php" }
   ]
 }
