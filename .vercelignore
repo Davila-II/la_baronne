@@ -1,0 +1,37 @@
+# Fichiers à ne pas déployer sur Vercel
+data/
+*.db
+*.sqlite
+*.psd
+*.psd
+router.php
+.env.local
+flyer/
+video/
+recu/
+polo/
+plm/
+entete/
+carte/
+controller/
+img/
+
+# Anciens fichiers HTML statiques
+*.html
+index2.html
+index3.html
+index4.html
+index5.html
+blog*.html
+about.html
+contacts.html
+portfolio*.html
+portfolio-single*.html
+services-single.html
+team-single.html
+404.html
+
+# Fichiers PSD et sources
+*.psd
+logo3*
+icoooo*
